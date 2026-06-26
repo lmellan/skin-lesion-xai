@@ -1,75 +1,93 @@
- 
-# Skin Lesion XAI ResNet50
+# Explicabilidad ResNet50 con Grad-CAM en lesiones cutaneas
 
-Este repositorio contiene el notebook utilizado para ejecutar un modelo ResNet50 entrenado con imágenes del dataset PAD-UFES-20. El notebook permite realizar inferencia sobre imágenes de lesiones cutáneas y visualizar mapas Grad-CAM para observar qué zonas de la imagen influyen en la predicción del modelo.
+Repositorio final del proyecto de Inteligencia Artificial Explicable (XAI) para analizar un modelo ResNet50 aplicado a imagenes de lesiones cutaneas del dataset PAD-UFES-20.
 
-## Importante sobre el notebook
+El objetivo principal del proyecto es estudiar si las predicciones del modelo pueden interpretarse mediante Grad-CAM y evaluarse con analisis complementarios de correspondencia espacial y fidelidad.
 
-El notebook fue desarrollado en Google Colab, por lo que se recomienda abrirlo y ejecutarlo directamente en ese entorno.
+## Archivos del repositorio
 
-Es posible que GitHub no lo muestre correctamente y aparezca el mensaje `Invalid Notebook`. Esto puede ocurrir por metadatos internos generados por Colab o por salidas interactivas del notebook. En ese caso, el archivo no necesariamente está dañado.
+```text
+README.md
+pipeline_resnet50_padufes_gradcam.ipynb
+pipeline_resnet50_padufes_gradcam.pdf
+```
 
-Para revisarlo correctamente:
+- `pipeline_resnet50_padufes_gradcam.ipynb`: notebook final ejecutado. Contiene el pipeline completo del proyecto, incluyendo preparacion de datos, entrenamiento/evaluacion del modelo, generacion de Grad-CAM, analisis con cajas manuales y calculo de fidelidad.
+- `pipeline_resnet50_padufes_gradcam.pdf`: exportacion del notebook final en PDF, util para revisar rapidamente la ejecucion y los resultados sin abrir Colab/Jupyter.
+- `README.md`: descripcion general del repositorio y guia de uso.
 
-1. Descargar el archivo `.ipynb` desde el repositorio.
-2. Abrirlo en Google Colab.
-3. Ejecutar las celdas desde Colab.
+## Notebook principal
 
-## Archivo principal
+La version final ejecutada del proyecto es:
 
 ```text
 pipeline_resnet50_padufes_gradcam.ipynb
-````
-
-## Contenido general
-
-El notebook incluye la descarga y preparación del dataset, entrenamiento/configuración del modelo ResNet50, inferencia sobre imágenes de lesiones cutáneas, evaluación de resultados y generación de mapas Grad-CAM.
-
-## Archivos y carpetas generadas
-
-Durante la ejecución del notebook se crean distintas carpetas y archivos:
-
-```text
-data/
 ```
 
-Contiene los datos utilizados por el notebook.
+Este archivo es la referencia principal del repositorio. Si se quiere reproducir el trabajo, debe abrirse y ejecutarse en Google Colab.
 
-* `data/raw/`: almacena los archivos descargados originalmente, como el archivo de metadatos y los `.zip` con imágenes.
-* `data/images/`: contiene las imágenes extraídas del dataset.
-* `data/metadata.csv`: archivo con la información asociada a las imágenes.
+## Contenido del notebook
 
-```text
-models/
-```
+El notebook incluye:
 
-Contiene el modelo entrenado o configurado.
+- Carga y preparacion del dataset PAD-UFES-20.
+- Division de datos por paciente para evitar fuga de informacion entre entrenamiento, validacion y prueba.
+- Entrenamiento de una ResNet50 preentrenada en ImageNet.
+- Evaluacion multiclase y evaluacion binaria cancer vs no cancer.
+- Seleccion de umbral binario usando el conjunto de validacion.
+- Generacion de mapas Grad-CAM.
+- Analisis cualitativo de casos verdaderos positivos, verdaderos negativos, falsos positivos y falsos negativos.
+- Analisis espacial con cajas manuales sobre la lesion.
+- Calculo de Faithfulness Correlation como metrica cuantitativa de fidelidad.
+- Registro del entorno de ejecucion usado en Google Colab.
 
-* `models/resnet_configurado.pt`: checkpoint del modelo ResNet50 utilizado para realizar inferencia.
+## Resultados principales
 
-```text
-outputs/
-```
+Evaluacion binaria en test: cancer (`BCC`, `MEL`, `SCC`) vs no cancer (`ACK`, `NEV`, `SEK`).
 
-Contiene los resultados generados por el notebook.
+- Imagenes de test: `460`.
+- Accuracy: `0.7913`.
+- Balanced accuracy: `0.7932`.
+- Precision cancer: `0.7490`.
+- Sensibilidad cancer: `0.8565`.
+- Especificidad: `0.7300`.
+- F1 cancer: `0.7992`.
+- ROC-AUC: `0.8765`.
+- PR-AUC: `0.8597`.
 
-* `outputs/splits.json`: división de datos utilizada para entrenamiento, validación y prueba.
-* `outputs/samples_grid.png`: visualización de ejemplos del dataset.
-* `outputs/training_curves.png`: curvas de entrenamiento.
-* `outputs/training_history.csv`: historial numérico del entrenamiento.
-* `outputs/metrics.json`: métricas obtenidas por el modelo.
-* `outputs/confusion_matrix.png`: matriz de confusión binaria.
-* `outputs/confusion_matrix_6way.png`: matriz de confusión multiclase.
-* `outputs/roc_curve.png`: curva ROC.
-* `outputs/binary_confusion_and_roc.png`: resumen visual con matriz de confusión y curva ROC.
+Resultados de explicabilidad:
 
-```text
-outputs/gradcam/
-```
+- Casos Grad-CAM analizados cualitativamente: `20`.
+- Casos con cajas manuales validas: `20`.
+- Activacion media dentro de la lesion: `0.5201`.
+- Enriquecimiento medio de activacion dentro de la lesion: `2.8766`.
+- Faithfulness Correlation media: `0.0640`.
+- Faithfulness Correlation mediana: `0.0514`.
+- Casos validos para fidelidad: `32`.
 
-Contiene las imágenes generadas con Grad-CAM.
+En conjunto, los resultados muestran que Grad-CAM entrega una interpretacion visual util, pero parcial. La activacion suele concentrarse mas en la lesion en casos correctamente clasificados, aunque tambien aparecen mapas difusos o casos donde mirar la region de la lesion no garantiza una decision correcta. La baja Faithfulness Correlation indica que una explicacion visualmente plausible no necesariamente refleja de forma fiel el comportamiento causal del modelo.
 
-* `gradcam_*.png`: visualizaciones donde se muestra la zona de la imagen que más influyó en la predicción del modelo.
+## Entorno de ejecucion
 
- 
+El notebook fue ejecutado en Google Colab con:
+
+- Python `3.12.13`.
+- GPU Tesla T4 con `15.64 GB` de VRAM.
+- 2 CPU.
+- CUDA `12.8`.
+- PyTorch `2.11.0+cu128`.
+- torchvision `0.26.0+cu128`.
+- Quantus `0.6.0`.
+- scikit-learn `1.6.1`.
+- NumPy `2.0.2`.
+- pandas `2.2.2`.
+- matplotlib `3.10.0`.
+- Pillow `11.3.0`.
+
+## Uso recomendado
+
+1. Abrir `pipeline_resnet50_padufes_gradcam.ipynb` en Google Colab.
+2. Ejecutar las celdas en orden si se desea reproducir el pipeline.
+3. Revisar `pipeline_resnet50_padufes_gradcam.pdf` si solo se quiere inspeccionar la ejecucion final y sus resultados.
+
  
