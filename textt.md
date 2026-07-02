@@ -759,3 +759,440 @@ LIME perturba el dato, observa cómo cambia la predicción y entrena un explicad
 ```text
 SHAP calcula cuánto aporta cada variable a la predicción, considerando todas las coaliciones posibles.
 ```
+
+
+Claro. Este PDF trata sobre **métodos contrafactuales en XAI**, es decir, explicaciones que no solo dicen “qué variable fue importante”, sino que responden algo más accionable: **qué debería cambiar en el dato de entrada para que el modelo entregue otra predicción**. Las slides se basan principalmente en Wachter et al. 2017, Dandl et al. 2020, Mothilal et al. 2020 y Guidotti 2022. 
+
+La idea central de los métodos contrafactuales es preguntar:
+
+```text
+¿Qué podría hacerse de manera diferente para lograr un resultado diferente?
+```
+
+Por ejemplo, si un modelo rechaza un crédito bancario, una explicación contrafactual no diría solamente “el ingreso fue importante” o “las deudas influyeron”, sino algo como:
+
+```text
+Si el ingreso mensual aumentara en X, 
+si la deuda bajara en Y,
+y si el número de tarjetas fuera Z,
+entonces el crédito habría sido aprobado.
+```
+
+Eso es distinto de LIME o SHAP. LIME y SHAP explican **por qué el modelo tomó una decisión** en términos de importancia o contribución de variables. En cambio, los contrafactuales explican **qué cambios mínimos harían que la decisión cambiara**.
+
+En imágenes, la idea es similar. Si el modelo clasifica una imagen como “maligna”, un contrafactual busca una versión modificada de esa imagen que sea lo más parecida posible a la original, pero que el modelo clasifique como “benigna”. La explicación no es una lista de pesos, sino una comparación entre la imagen original y una imagen modificada que cambia la predicción.
+
+---
+
+Un contrafactual se puede pensar así:
+
+```text
+x = dato original
+f(x) = predicción original del modelo
+x' = dato contrafactual
+f(x') = predicción deseada
+```
+
+La meta es encontrar un `x'` que cumpla dos cosas al mismo tiempo:
+
+```text
+1. f(x') debe ser la salida deseada.
+2. x' debe parecerse lo más posible a x.
+```
+
+Es decir, queremos cambiar la predicción, pero modificando lo mínimo posible el dato original. Por eso los contrafactuales son explicaciones locales: explican una instancia específica, no todo el modelo.
+
+Un buen contrafactual debería cumplir cuatro condiciones importantes:
+
+```text
+1. Lograr la predicción deseada.
+2. Ser lo más parecido posible al dato original.
+3. Cambiar pocas variables.
+4. Tener valores realistas.
+```
+
+Por ejemplo, si a Patricia le rechazaron un crédito, no sería útil decirle:
+
+```text
+Si tu edad fuera -5 años, el crédito sería aprobado.
+```
+
+Eso cambia la predicción, pero no es realista. Tampoco sería útil decir:
+
+```text
+Si cambiaras 25 variables al mismo tiempo, el crédito sería aprobado.
+```
+
+Eso puede ser correcto matemáticamente, pero poco accionable. Una buena explicación contrafactual debe ser cercana, realista y útil.
+
+---
+
+El primer método importante del PDF es el de **Wachter et al. 2017**. Este método propone buscar una instancia contrafactual resolviendo un problema de optimización. La fórmula general, escrita de forma simple, es:
+
+```text
+min_x' max_lambda [ lambda * ( f_w(x') - y' )^2 + d(x_i, x') ]
+```
+
+Donde:
+
+```text
+f_w = modelo ML con parámetros fijos
+x_i = instancia original
+x' = instancia contrafactual que buscamos
+y' = salida deseada
+d(x_i, x') = distancia entre el dato original y el contrafactual
+lambda = parámetro que controla la importancia de alcanzar la salida deseada
+```
+
+La fórmula tiene dos partes principales.
+
+La primera parte es:
+
+```text
+lambda * ( f_w(x') - y' )^2
+```
+
+Esto castiga que la predicción del contrafactual esté lejos de la salida deseada. Si queremos que el modelo prediga “aprobado”, pero todavía predice “rechazado”, este término será grande.
+
+La segunda parte es:
+
+```text
+d(x_i, x')
+```
+
+Esto castiga que el contrafactual sea muy distinto del dato original. Queremos que `x'` cambie lo menos posible respecto de `x_i`.
+
+Entonces el método intenta equilibrar dos objetivos:
+
+```text
+Cambiar la predicción
+pero modificando lo menos posible el dato original.
+```
+
+El parámetro `lambda` ayuda a evitar que el método encuentre una solución muy parecida al dato original, pero que no cambie realmente la predicción. Si la predicción todavía no se acerca a `y'`, aumentar `lambda` hace que ese error pese más, obligando al algoritmo a buscar un contrafactual que sí logre el resultado deseado.
+
+---
+
+Wachter también propone una distancia específica: la **distancia de Manhattan ponderada por la inversa del MAD**. En formato simple:
+
+```text
+d(x_i, x') = sum_k | x_i,k - x'_k | / MAD_k
+```
+
+Donde:
+
+```text
+x_i,k = valor de la variable k en el dato original
+x'_k = valor de la variable k en el contrafactual
+MAD_k = desviación mediana absoluta de la variable k
+```
+
+El MAD se define como:
+
+```text
+MAD_k = mediana_j | x_j,k - mediana_l(x_l,k) |
+```
+
+La idea del MAD es normalizar las variables según su variabilidad. Si una variable normalmente varía mucho, un cambio grande en esa variable no debería penalizarse tanto. Si una variable normalmente varía poco, un cambio pequeño puede ser más relevante.
+
+Por ejemplo, cambiar el ingreso mensual en 50.000 pesos puede ser un cambio pequeño si los ingresos varían mucho en el dataset. Pero cambiar el número de hijos de 1 a 5 puede ser un cambio mucho más fuerte. La distancia ponderada ayuda a que las variables se comparen de forma más justa.
+
+El método de Wachter cumple bien dos cosas:
+
+```text
+1. Busca una predicción deseada.
+2. Busca que el contrafactual sea cercano al dato original.
+```
+
+Pero tiene limitaciones:
+
+```text
+1. No garantiza múltiples explicaciones diversas.
+2. No garantiza que el contrafactual sea realista.
+```
+
+Por ejemplo, podría encontrar solo una solución, o podría modificar valores de manera poco plausible.
+
+---
+
+Luego aparece el método de **Dandl et al. 2020**, que mejora la idea anterior usando una optimización multiobjetivo. En vez de tener solo “lograr la salida deseada” y “parecerse al dato original”, Dandl agrega más criterios.
+
+La idea es encontrar un contrafactual `x` para una instancia original `x*` que cumpla:
+
+```text
+1. Que f(x) esté cerca de la salida deseada.
+2. Que x sea cercano a x*.
+3. Que x difiera de x* en pocas variables.
+4. Que x sea realista respecto de los datos observados.
+```
+
+La función multiobjetivo se puede escribir de forma simple como:
+
+```text
+min_x o(x) = min_x ( o1(f(x), Y'), o2(x, x*), o3(x, x*), o4(x, X_obs) )
+```
+
+Cada término mide algo distinto.
+
+El primer término mide si el contrafactual logra la salida deseada:
+
+```text
+o1(f(x), Y')
+```
+
+Si la predicción ya pertenece al conjunto de salidas deseadas `Y'`, el costo es 0. Si no, se penaliza qué tan lejos está de lograrlo.
+
+El segundo término mide la cercanía entre el contrafactual y el dato original usando la **distancia de Gower**:
+
+```text
+o2(x, x*) = (1/p) * sum_j delta_G(x_j, x*_j)
+```
+
+Donde:
+
+```text
+p = número de variables
+delta_G = distancia de Gower por variable
+```
+
+Para variables numéricas:
+
+```text
+delta_G(x_j, x*_j) = |x_j - x*_j| / R_j
+```
+
+Donde `R_j` es el rango observado de la variable `j`.
+
+Para variables categóricas:
+
+```text
+delta_G(x_j, x*_j) = 1 si x_j es distinto de x*_j
+delta_G(x_j, x*_j) = 0 si x_j es igual a x*_j
+```
+
+La distancia de Gower es útil porque permite comparar variables numéricas y categóricas dentro de una misma medida.
+
+El tercer término mide cuántas variables cambiaron. Esto se relaciona con la norma `l0`, que cuenta cuántos elementos son distintos:
+
+```text
+o3(x, x*) = número de variables que cambiaron
+```
+
+Esto es importante porque una explicación contrafactual debería ser simple. Es mejor decir:
+
+```text
+Cambia estas 2 variables.
+```
+
+que decir:
+
+```text
+Cambia estas 15 variables.
+```
+
+El cuarto término mide qué tan realista es el contrafactual:
+
+```text
+o4(x, X_obs)
+```
+
+La idea es comparar el contrafactual con puntos reales observados en el dataset. Si el contrafactual queda muy lejos de los datos reales, probablemente no es plausible. Dandl usa una distancia promedio ponderada de Gower con los `k` puntos observados más cercanos. En simple:
+
+```text
+Si x está cerca de datos reales observados, es más realista.
+Si x está lejos de todos los datos reales, es menos realista.
+```
+
+Como esta optimización tiene varios objetivos al mismo tiempo, se usa un algoritmo evolutivo llamado **NSGA-II**, que permite encontrar soluciones que equilibran estos criterios sin reducir todo a un único número.
+
+---
+
+Después aparece **DICE**, que significa **Diverse Counterfactual Explanations**. Este método se centra especialmente en generar **múltiples contrafactuales diversos**.
+
+La idea es que no siempre existe una única forma de cambiar una predicción. Por ejemplo, si a una persona le rechazan un crédito, podría haber varias alternativas:
+
+```text
+Opción 1: aumentar ingreso.
+Opción 2: reducir deuda.
+Opción 3: aumentar ingreso y reducir número de tarjetas.
+```
+
+DICE intenta generar un conjunto de contrafactuales:
+
+```text
+c1, c2, ..., ck
+```
+
+donde cada `c_i` cambia la predicción del modelo, pero además las soluciones son diversas entre sí.
+
+La función de pérdida de DICE, en formato simple, es:
+
+```text
+C(x) = argmin_{c1,...,ck} 
+       (1/k) * sum_i yloss(f(c_i), y)
+       + (lambda1/k) * sum_i dist(c_i, x)
+       - lambda2 * dpp_diversity(c1,...,ck)
+```
+
+Tiene tres partes principales.
+
+La primera parte:
+
+```text
+(1/k) * sum_i yloss(f(c_i), y)
+```
+
+castiga que los contrafactuales no logren la clase deseada.
+
+La segunda parte:
+
+```text
+(lambda1/k) * sum_i dist(c_i, x)
+```
+
+castiga que los contrafactuales sean muy distintos del dato original.
+
+La tercera parte:
+
+```text
+- lambda2 * dpp_diversity(c1,...,ck)
+```
+
+premia la diversidad. Tiene signo negativo porque estamos minimizando, entonces restar diversidad equivale a favorecer soluciones diversas.
+
+El `yloss` puede ser una hinge loss. En formato simple:
+
+```text
+hinge_loss = max(0, 1 - z * logit(f(c)))
+```
+
+Donde:
+
+```text
+z = 1 si la clase deseada es 1
+z = -1 si la clase deseada es 0
+f(c) = probabilidad predicha por el modelo
+logit(f(c)) = log( f(c) / (1 - f(c)) )
+```
+
+La intuición es esta:
+
+```text
+Si el contrafactual ya logra la clase deseada, la pérdida es 0.
+Si no logra la clase deseada, la pérdida es positiva.
+```
+
+Por ejemplo, si quiero que el contrafactual sea clase 1 y el modelo predice 0.9, eso está bien y no se penaliza. Pero si quiero que sea clase 0 y el modelo predice 0.9, eso está mal y se penaliza mucho.
+
+Para medir diversidad, DICE usa una idea basada en **Determinantal Point Processes**, abreviado DPP. La métrica de diversidad se basa en el determinante de una matriz `K`:
+
+```text
+dpp_diversity = det(K)
+```
+
+Donde:
+
+```text
+K_ij = 1 / (1 + dist(c_i, c_j))
+```
+
+Si dos contrafactuales son muy parecidos, su distancia es pequeña, entonces `K_ij` queda cerca de 1. Eso hace que las filas de la matriz se parezcan mucho y el determinante tienda a ser pequeño. En cambio, si los contrafactuales son distintos, la matriz tiene filas más independientes y el determinante puede ser mayor.
+
+En simple:
+
+```text
+DICE busca contrafactuales que sean válidos, cercanos al dato original y distintos entre sí.
+```
+
+---
+
+La última parte del PDF trata sobre **contrafactuales generativos**, especialmente usando GANs. Esto aparece porque los métodos clásicos como Wachter o DICE pueden funcionar bien en datos tabulares, pero en imágenes pueden tener problemas. Si se modifican directamente los píxeles, pueden aparecer imágenes poco realistas, con artefactos visuales o cambios que no respetan la estructura real de los datos.
+
+Por ejemplo, en imágenes médicas, modificar píxel por píxel puede generar una imagen que cambia la predicción del modelo, pero que no parece una imagen médica real. Eso limita mucho la utilidad de la explicación.
+
+Para resolver esto, se propone generar contrafactuales en el **espacio latente** de un modelo generativo.
+
+Primero hay que entender qué es una **GAN**, o Generative Adversarial Network. Una GAN tiene dos componentes:
+
+```text
+Generador = crea imágenes falsas a partir de ruido.
+Discriminador = intenta distinguir imágenes reales de imágenes generadas.
+```
+
+El generador aprende a producir imágenes cada vez más realistas para engañar al discriminador. El discriminador aprende a detectar si una imagen es real o falsa. Ambos se entrenan en competencia.
+
+El flujo básico es:
+
+```text
+z ~ N(0,1) → Generador → imagen generada → Discriminador → probabilidad de ser real
+```
+
+Donde `z` es un vector latente, es decir, una representación interna de menor dimensión que codifica características importantes de la imagen.
+
+La idea de los contrafactuales generativos es no modificar directamente los píxeles, sino modificar el vector latente. En vez de hacer esto:
+
+```text
+imagen original → modificar píxeles → imagen contrafactual
+```
+
+se hace esto:
+
+```text
+imagen original → codificación latente → modificar vector latente → generar imagen contrafactual
+```
+
+Esto tiene varias ventajas:
+
+```text
+1. Las imágenes son más realistas.
+2. Los cambios son más suaves.
+3. Se respeta mejor la distribución de los datos.
+4. La explicación puede ser más interpretable visualmente.
+```
+
+---
+
+El PDF menciona como ejemplo **CheXplaining**, un método que genera contrafactuales en imágenes médicas usando StyleGAN. La idea es buscar cambios en el espacio latente que modifiquen la predicción del clasificador, pero manteniendo imágenes realistas.
+
+El flujo general de CheXplaining es:
+
+```text
+1. Se recibe una imagen de entrada I.
+2. Un encoder transforma la imagen en un vector latente w.
+3. Un clasificador preentrenado predice la clase de la imagen.
+4. StyleGAN usa el vector latente para generar imágenes.
+5. Se buscan direcciones en el espacio latente que cambien la salida del clasificador.
+6. Se generan imágenes contrafactuales realistas.
+```
+
+Un punto importante es que CheXplaining no hace optimización directa como Wachter ni búsqueda aleatoria. En vez de eso, intenta aprender direcciones interpretables en el espacio latente, llamadas direcciones en el **StyleSpace**, que están alineadas con el comportamiento del clasificador.
+
+En simple:
+
+```text
+CheXplaining busca qué dirección en el espacio latente transforma una imagen para cambiar la predicción del modelo, manteniendo la imagen realista.
+```
+
+Esto es especialmente relevante para imágenes, porque en imágenes no basta con cambiar valores numéricos: el resultado debe seguir pareciendo una imagen plausible.
+
+---
+
+La idea final del tema es que los métodos contrafactuales explican modelos de una forma muy distinta a LIME y SHAP. Mientras LIME y SHAP responden:
+
+```text
+¿Qué partes o variables influyeron en esta predicción?
+```
+
+los contrafactuales responden:
+
+```text
+¿Qué tendría que cambiar para obtener otra predicción?
+```
+
+Por eso son muy intuitivos y accionables. En un crédito, pueden decir qué cambiar para ser aprobado. En imágenes médicas, pueden mostrar qué transformación haría que el modelo cambiara de clase. Pero también tienen desafíos importantes: los cambios deben ser mínimos, realistas, diversos y factibles.
+
+La frase clave para recordar es:
+
+```text
+Un contrafactual es una versión modificada del dato original que cambia la predicción del modelo, intentando cambiar lo menos posible y mantenerse realista.
+```
